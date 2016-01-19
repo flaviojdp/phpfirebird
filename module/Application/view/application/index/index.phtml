@@ -1,0 +1,9 @@
+<form method="POST">
+    <label>Qualquer texto</label>
+    <textarea name="texto"></textarea></br>
+    <input type="submit" value="Salvar" />
+</form>
+<?php
+    foreach ($this->dados as $d){
+        echo sprintf("<p>%s</p>", $d['CAMPO']);
+    }
