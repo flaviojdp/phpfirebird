@@ -1,1 +1,279 @@
-Ha ha ha e ha
+<html>
+  <header>
+    <script src="./js/angular/angular.min.js"></script>
+    <script>
+      /*
+      if ('serviceWorker' in navigator) {
+        // Register a service worker hosted at the root of the
+        // site using the default scope.
+        navigator.serviceWorker.register('./service-worker.js').then(function(registration) {
+          console.log('Service worker registration succeeded:', registration);
+        }).catch(function(error) {
+          console.log('Service worker registration failed:', error);
+        });
+      } else {
+        console.log('Service workers are not supported.');
+      }
+      */
+      if('serviceWorker' in navigator){
+          navigator.serviceWorker
+          .register('./service-worker.js')
+          .then(function(reg){
+              //alert('ok...');
+          })
+          .catch(function( e ){
+            console.log( e );
+            //alert('erro');
+          });
+          //alert('yes...');
+      }
+    </script>
+  </header>
+  <body ng-app="appFaq">
+    <div ng-controller="ControllerFaq as faq">
+      <div ng-if="!faq.user">
+        logar...
+        <form>
+          Login: <input type="text" name="nome" ng-model="faq.usuario.nome" /><br/>
+          Senha: <input type="password" name="senha" ng-model="faq.usuario.senha" />
+        </form>
+        <button ng-click="faq.login()">Login...</button>
+      </div>
+      <div ng-if="faq.user">
+        {{faq.user.nome}} a
+        <button ng-click="faq.logout()">Sair...</button>
+        <input type="text" ng-model="faq.search"/>
+        <button ng-click="faq.newFaq()" ng-if="!faq.showForm">Nova Pergunta</button>
+        <button ng-click="faq.setShowForm(false)"  ng-if="faq.showForm">Cancelar</button>
+        <div ng-show="faq.showForm">
+          <form>
+            Aplicativo:
+            <select name="apl_cod" ng-model="faq.faq.apl_cod" placeholder="Aplicativo">
+              <option ng-repeat="a in faq.aplicativos" value="{{a.cod_aplicativo}}">{{a.nome_aplicativo}}</option>
+            </select><br>
+            Assunto:
+            <input type="text" name="assunto_faq" placeholder="Assunto" ng-model="faq.faq.assunto_faq" /><br>
+            Pergunta:
+            <input type="text" name="pergunta_faq" ng-model="faq.faq.pergunta_faq" placeholder="Pergunta" /><br>
+            Resposta:
+            <input type="text" name="resposta" ng-model="faq.faq.resposta" placeholder="Resposta..." /><br>
+            Data:
+            <input type="text" name="data_faq" ng-model="faq.faq.data_faq" placeholder="Data..." /><br>
+            <button ng-click="faq.saveFaq()">Save</button>
+          </form>
+        </div>
+      <ul>
+        <li ng-repeat="p in faq.perguntas | filter: faq.search">
+          <h4>{{p.nome_aplicativo}} - {{p.assunto_faq}} - {{p.pergunta_faq}}</h4>
+          <p>{{p.resposta}}</p>
+          <ul>
+            <li ng-repeat="ot in p.outros">
+              <p> {{ot.nome}}</p>
+              <p>{{ot.descricao}}</p>
+            </li>
+          </ul>
+        </li>
+      </ul>
+      </div>
+    </div>
+    <script>
+      (function(){
+        'use strict';
+        function ServiceLogin( $q, $http ){
+          if (typeof(Storage) !== "undefined") {
+              // Code for localStorage/sessionStorage.
+          } else {
+              // Sorry! No Web Storage support..
+              alert("Navegador não suportado!!!");
+          }
+          
+          this.login = login;
+          this.logout = logout;
+          this.isLogado = isLogado;
+          this.getCredencial = getCredencial;
+          function login(usuario){
+            var deferred = $q.defer();
+            $http.post('validar.php', usuario ).then(  
+              ok =>{
+                if(ok.data.logou){
+                  localStorage.setItem('usuario', angular.toJson( ok.data )  );
+                  deferred.resolve(true);
+                }
+                else{
+                  deferred.reject(false);
+                }
+              },
+              erro => {
+                deferred.reject(false);
+              }
+            );
+            return deferred.promise;
+          }
+          function logout(){
+            window.localStorage.clear();
+          }
+          function isLogado(){
+            return !!localStorage.getItem('usuario');
+          }
+          function getCredencial(){
+            if( isLogado() ){
+              return angular.fromJson( localStorage.getItem('usuario') );
+            }
+          }
+        };
+        function ServiceFaq( $http ){
+          
+          this.save = save;
+          this.listAll = listAll;
+          this.listAplicativos = listAplicativos;
+          
+          function listAll(){
+            //return $http.get('faq_save.php' ).then( response => response.data );
+            
+            return $http.get('faq_save.php' ).then( response => {
+              var dados = [];
+              savePerguntasLocalStorage( response.data );
+              return getPerguntasLocalStorage();
+            },
+            erro => {
+              if( getPerguntasLocalStorage() ){
+                return getPerguntasLocalStorage();
+              }
+              else{
+                return [];
+              }
+            });
+            
+          }
+          
+          function savePerguntasLocalStorage( perguntas ){
+            localStorage.setItem( 'perguntas', angular.toJson( perguntas ) );
+          }
+          
+          function getPerguntasLocalStorage( getPerguntasLocalStorage ){
+            return  angular.fromJson( localStorage.getItem( 'perguntas' ) );
+          }
+          
+          function save( faq ){
+            $http.post('faq_save.php', faq ).then( response => {
+              return response.data;
+            });
+          }
+          
+          function listAplicativos(){
+            return $http.get('aplicativos.php' ).then( response => response.data );
+          }
+        }
+        
+        function ControllerFaq($http,ServiceLogin, ServiceFaq ){
+          var vm = this;
+          
+          
+          iniciar();
+          
+          vm.setShowForm = parametro => vm.showForm = parametro;
+          vm.login = login;
+          vm.logout = logout;
+          vm.saveFaq = saveFaq;
+          vm.newFaq = newFaq;
+          vm.cancelar = cancelar;
+          vm.listAll = listAll;
+          vm.listAplicativos = listAplicativos;
+          
+          function iniciar(){
+
+            if( ServiceLogin.isLogado() ){
+              vm.user = ServiceLogin.getCredencial();
+            }
+            vm.usuario = {
+              nome: '',
+              senha: ''
+            };
+            vm.perguntas = [
+              {
+                pergunta: 'Vai dar certo?',
+                resposta: 'Com toda a certeza.',
+                outros : [
+                  {
+                    nome: "Verificar antes de abrir atendimento...",
+                    descricao: "Ver se não foi gerado NPES...."
+                  }
+                ]
+              },
+
+              {
+                pergunta: 'Mas... será?',
+                resposta: 'Ochê!!!!!'
+              },
+            ];
+
+            if( ServiceLogin.isLogado() ){
+              listAll();
+            }
+            vm.search = '';
+            vm.showForm = false;          
+            listAplicativos();
+          }
+          
+          function listAplicativos(){
+            ServiceFaq.listAplicativos().then( res => {
+              vm.aplicativos = res;
+            });
+          }
+          
+          function listAll(){            
+            ServiceFaq.listAll().then( res => {
+              vm.perguntas = res;
+            });
+          }
+          function cancelar(){
+            vm.setShowForm(false);
+            vm.faq = null;
+          }
+          function newFaq(){
+            vm.setShowForm(true);
+            var data = new Date();
+            vm.faq = {
+              apl_cod : 1,
+              assunto_faq : null,
+              pergunta_faq : null,
+              resposta : null,
+              data_faq : data.toLocaleDateString(),
+              cod_tecn : vm.user.codigo
+            };
+          }
+          
+          function login(){
+            ServiceLogin.login( vm.usuario ).then(
+              function(ok){
+                vm.user = ServiceLogin.getCredencial();
+                listAll();
+              },
+              function(erro){
+                  vm.user = null;
+                  alert('Erro ao fazer login...');
+                }
+            );
+          }
+          
+          function logout(){
+            vm.user = null;
+            ServiceLogin.logout();
+          }
+          
+          function saveFaq(){            
+            ServiceFaq.save( vm.faq ).then( dados => {
+              vm.setShowForm(false);
+              vm.faq = null;
+              listAll();
+            });            
+          }
+        }
+        angular.module('appFaq',[]);
+        angular.module('appFaq').controller('ControllerFaq',ControllerFaq);
+        angular.module('appFaq').service('ServiceLogin',ServiceLogin);
+        angular.module('appFaq').service('ServiceFaq',ServiceFaq);
+      })();      
+    </script>
+  </body>
+</html>
